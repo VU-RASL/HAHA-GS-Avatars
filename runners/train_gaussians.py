@@ -1,6 +1,7 @@
 import os
 import statistics
 from collections import defaultdict
+from PIL import Image
 
 import cv2
 import numpy as np
@@ -23,7 +24,7 @@ from utils.optimizer_utils import cat_tensors_to_optimizer, prune_optimizer
 from utils.rasterizer import NVDiffrast
 
 from pytorch3d.ops import knn_points
-
+from plyfile import PlyData, PlyElement
 
 class TextureAndGaussianTrainer(nn.Module):
     BETAS_SHAPE = 10
@@ -135,6 +136,8 @@ class TextureAndGaussianTrainer(nn.Module):
         self.logger = None
         self._loaded_training_stage = None
 
+
+
     @property
     def device(self):
         return "cuda"
@@ -176,6 +179,8 @@ class TextureAndGaussianTrainer(nn.Module):
                             dtype=torch.float32,
                             )
         self._smplx_model = smplx.create(gender=gender, **model_params)
+        # here we may change dimension of beta and expression by self._smplx_model.shape_param_dim =100
+        # self._smplx_model.expr_param_dim = 50
         self._faces = self._smplx_model.faces_tensor.contiguous().int()
 
         model_fn = 'SMPLX_{}.{ext}'.format(gender.upper(), ext="npz")
@@ -204,13 +209,16 @@ class TextureAndGaussianTrainer(nn.Module):
         self._xyz_gradient_denom = torch.nn.Parameter(torch.zeros([npoints], device=self.device), requires_grad=False)
         self._max_radii2D = torch.nn.Parameter(torch.zeros([npoints], device=self.device), requires_grad=False)
 
-    def load_checkpoint(self, pretrain_path):
+    def load_checkpoint(self, pretrain_path):   
         checkpoint_data = torch.load(pretrain_path)
         state_dict = checkpoint_data['state_dict']
 
         for key in list(state_dict.keys()):
             if key.startswith('_body_pose_dict'):
                 del state_dict[key]
+        state_dict = {k: v for k, v in state_dict.items() if not k.startswith("lpips.net.scaling_layer")}
+        state_dict = {k: v for k, v in state_dict.items() if not k.startswith("_smplx_model.right_hand_components")}
+        state_dict = {k: v for k, v in state_dict.items() if not k.startswith("_smplx_model.left_hand_components")}
         self.change_parameters_shape(len(state_dict['_xyz']))
 
         npoints = len(state_dict["_xyz"])
@@ -241,8 +249,115 @@ class TextureAndGaussianTrainer(nn.Module):
             'state_dict': self.state_dict(),
         }, save_path)
 
+        # save ply as original gaussian 
+        print('xyz: ',self._xyz.shape)
+        print('rotation: ',self._rotation.shape)
+        print('opacity: ',self._opacity.shape)
+        print('color: ',self._color.shape)
+        print('scale:',self._scaling.shape)
+        save_path_ply = os.path.join(save_folder, str(training_stage).split('.')[-1] + "_" + str(step) + '.ply')
+        self.save_path_ply = save_path_ply
+        
+        
+
+        self.save_ply(path = save_path_ply,
+                      xyz = self._xyz,
+                      color = self._color,
+                      opacity= self._opacity,
+                      scaling=  self._scaling,
+                      rotation=self._rotation)
+
+    def save_ply(self, path,xyz,color,opacity,scaling,rotation):
+        # add on code , check shape
+        # initalize the sh feature, but not trained, for the sake of saving ply
+        N = xyz.shape[0]  # Number of points
+        max_sh_degree = 3 
+
+        # Initialize self._features_dc with shape (N, 1, 3) filled with zeros
+        features_dc = color.unsqueeze(1)
+        self._features_dc = features_dc.clone()
+        # Initialize self._features_rest with shape (N, 3, 24) filled with zeros
+        num_sh_coeffs = (max_sh_degree + 1) ** 2 - 1  # 15 for max_sh_degree=4
+        features_rest = torch.zeros((N, 3, num_sh_coeffs), dtype=torch.float32, device="cuda")
+        self._features_rest = features_rest
+        print('features_dc :', features_dc.shape)
+        print('features_rest :', features_rest.shape)
+
+
+        #self.feature_dc, self.feature_rest = self.compute_features_from_rgb(self._color)
+      
+ 
+        # original code
+        xyz = xyz.detach().cpu().numpy()
+        normals = np.zeros_like(xyz)
+
+        f_dc = features_dc.detach().transpose(1, 2).flatten(start_dim=1).contiguous().cpu().numpy()
+        f_rest = features_rest.detach().transpose(1, 2).flatten(start_dim=1).contiguous().cpu().numpy()
+        opacities = opacity.detach().cpu().numpy()
+        scale = scaling.detach().cpu().numpy()
+        rotation = rotation.detach().cpu().numpy()
+
+        dtype_full = [(attribute, 'f4') for attribute in self.construct_list_of_attributes()]
+
+        elements = np.empty(xyz.shape[0], dtype=dtype_full)
+        attributes = np.concatenate((xyz, normals, f_dc, f_rest, opacities, scale, rotation), axis=1)
+        elements[:] = list(map(tuple, attributes))
+        el = PlyElement.describe(elements, 'vertex')
+        PlyData([el]).write(path)
+    
+    def construct_list_of_attributes(self):
+        l = ['x', 'y', 'z', 'nx', 'ny', 'nz']
+        # All channels except the 3 DC
+        for i in range(self._features_dc.shape[1]*self._features_dc.shape[2]):
+            l.append('f_dc_{}'.format(i))
+        for i in range(self._features_rest.shape[1]*self._features_rest.shape[2]):
+            l.append('f_rest_{}'.format(i))
+        l.append('opacity')
+        for i in range(self._scaling.shape[1]):
+            l.append('scale_{}'.format(i))
+        for i in range(self._rotation.shape[1]):
+            l.append('rot_{}'.format(i))
+        return l
+    def compute_features_from_rgb(self, rgb_values, max_sh_degree=4):
+        """
+        Compute feature_dc (direct color) and feature_rest (higher-order SH coefficients)
+        from RGB values.
+
+        Parameters:
+            rgb_values (torch.Tensor): Tensor of shape (N, 3) containing RGB values.
+            max_sh_degree (int): Maximum SH degree. Default is 4.
+
+        Returns:
+            feature_dc (torch.Tensor): SH direct color coefficients of shape (N, 1, 3).
+            feature_rest (torch.Tensor): SH higher-order coefficients of shape (N, M, 3), 
+                                        where M = (max_sh_degree + 1)**2 - 1.
+        """
+        # Number of SH coefficients
+        num_sh_coeffs = (max_sh_degree + 1) ** 2
+
+        # Initialize features tensor
+        N = rgb_values.shape[0]  # Number of points
+
+        # Create feature tensor for SH coefficients
+        features = torch.zeros((N, 3, num_sh_coeffs), dtype=torch.float32)
+
+        # Assign direct color (0th band) to feature_dc
+        features[:, :, 0] = rgb_values
+
+        # Assign higher-order SH coefficients (feature_rest)
+        # These can be initialized as zeros or small random values.
+        features[:, :, 1:] = torch.zeros((N, 3, num_sh_coeffs - 1))
+
+        # Split into feature_dc and feature_rest
+        feature_dc = features[:, :, 0:1].permute(0, 2, 1).contiguous()  # Shape: (N, 1, 3)
+        feature_rest = features[:, :, 1:].permute(0, 2, 1).contiguous()  # Shape: (N, M, 3)
+
+        return feature_dc, feature_rest
+
+
     def initialize_optimizable_pose(self, dataset):
         for i in range(dataset._len):
+            #print( i,dataset._len )
             data_dict = dataset[i]
             smplx_params = data_dict["smplx_params"]
             pid = data_dict["pid"]
@@ -559,7 +674,23 @@ class TextureAndGaussianTrainer(nn.Module):
             predicted_parameters["gaussians_scales"] = torch.stack(scaling_list, dim=0)
             predicted_parameters["gaussians_colors"] = self._color.unsqueeze(0).repeat(batch_size, 1, 1)
             predicted_parameters["gaussians_opacity"] = o_act(self._opacity.unsqueeze(0).repeat(batch_size, 1, 1))
+            
+            # print(predicted_parameters["gaussians_xyz"].shape)
+            # print(predicted_parameters["gaussians_rotations"].shape)
+            # print(predicted_parameters["gaussians_opacity"].shape)
+            # print(predicted_parameters["gaussians_colors"].shape)
+            # print(predicted_parameters["gaussians_scales"].shape)
+           
 
+        
+        
+
+            #self.save_ply(path = self.save_path_ply,
+            #          xyz = predicted_parameters["gaussians_xyz"][0],
+            #          color = predicted_parameters["gaussians_colors"][0],
+            #          opacity= predicted_parameters["gaussians_opacity"][0],
+            #          scaling=  predicted_parameters["gaussians_scales"][0],
+            #         rotation=predicted_parameters["gaussians_rotations"][0])
             # HEAT MAP AS COLOR
             """
             xyz = predicted_parameters["gaussians_xyz"]
@@ -586,6 +717,28 @@ class TextureAndGaussianTrainer(nn.Module):
         background = data_dict["background"]
 
         rasterization = gaussian_rasterization * alpha + (1 - alpha) * mesh_rasterization  # gaussian_rasterization
+        
+        
+        #print(alpha.shape)
+        #print(alpha)
+        #temp_folder = "temp"
+        # Loop through each batch and save the mask as an image
+        #for batch_idx in range(alpha.size(0)):
+            # Extract the mask for the current batch
+            #mask = alpha[batch_idx, 0].cpu().detach().numpy()  # Convert to NumPy array
+            
+            # Convert the mask to uint8 format (0 or 255 for binary image)
+            #mask_image = (mask * 255).astype(np.uint8)
+            
+            # Create a PIL Image and save it
+            #image = Image.fromarray(mask_image)
+            #image_path = os.path.join(temp_folder, f"mask_batch_{batch_idx+1}.png")
+            #image.save(image_path)
+
+            #print(f"Saved mask image: {image_path}")
+        
+        
+        
         merged_mask = torch.clip(alpha + data_dict["mask_uv"], 0, 1)  # alpha
         rasterization = rasterization * merged_mask + (1 - merged_mask) * background
 
@@ -653,6 +806,9 @@ class TextureAndGaussianTrainer(nn.Module):
             # Train only gaussians
             INF_FAR = 1000
             data_dict["mesh_depth"] = torch.ones_like(data_dict["background"]) * INF_FAR
+            #for i in data_dict:
+            #    print(i, data_dict[i].shape)
+            #print(Test)
             data_dict.update(self._gaussian_rasterizer(data_dict))
             data_dict["rasterization"] = data_dict["gaussian_rasterization"]
             data_dict["merged_mask"] = data_dict["gaussian_alpha"]
@@ -689,7 +845,7 @@ class TextureAndGaussianTrainer(nn.Module):
             scheduler=None,
     ):
         train_iter = iter(train_dataloader)
-
+        print(training_stage)
         pbar = tqdm(range(steps))
         for step in pbar:
             # Iterate train again and again
@@ -701,6 +857,9 @@ class TextureAndGaussianTrainer(nn.Module):
             optimizer.zero_grad()
 
             loss, outputs = self.training_step(train_batch, training_stage)
+            #print(outputs.keys())
+            #print(outputs['gaussians_xyz'].detach().cpu().numpy().shape)
+            #print(test)
             loss.backward()
             optimizer.step()
             if scheduler:
@@ -737,6 +896,8 @@ class TextureAndGaussianTrainer(nn.Module):
                                      '_xyz')
 
         training_stage = TrainingStage.OPTIMIZE_GAUSSIANS
+        self.save_checkpoint(training_stage, self.global_step)
+
         self._change_lr(optimizer, training_stage)
         self.fit_training_stage(
             optimizer, train_dataloader, val_dataloader, training_stage, self._gaussians_optimize_steps, scheduler
@@ -766,6 +927,13 @@ class TextureAndGaussianTrainer(nn.Module):
         if val_dataloader is not None:
             self.evaluate(val_dataloader, training_stage)
         self.save_checkpoint(training_stage, self.global_step)
+        
+        #self.save_ply(path = self.save_path_ply,
+        #              xyz = self._xyz,
+        #              color = self._color,
+        #              opacity= self._opacity,
+        #              scaling=  self._scaling,
+        #              rotation= self._rotation)
 
     def fit_pose(self, test_dataloader):
         optimizer = self.configure_optimizers_pose_tune()

@@ -60,6 +60,7 @@ class DataLoader(torch.utils.data.Dataset):
             white_background=False,
             render_size=640,
     ):
+        self.data_root = data_root
         self._images_path = os.path.join(data_root, "render/image")
         self._masks_path = os.path.join(data_root, "render/depth")
         self._smplx_path = os.path.join(data_root, "SMPLX")
@@ -84,8 +85,14 @@ class DataLoader(torch.utils.data.Dataset):
             self._pid_camera_map[int(pid)] = num
 
     def load_sample(self, pid):
+        self._masks_path_new = os.path.join(self.data_root, "render/mask")
         rgb_image = cv2.imread(os.path.join(self._images_path, "color_{:06d}.png".format(pid)))
         H, W, _ = rgb_image.shape
+        
+        flag = 'None'
+        if H == 1200 :
+            flag = 'X'
+
         vertical_offset = (H - W) // 2
         rgb_image = rgb_image[vertical_offset:vertical_offset + W]
         rgb_image = cv2.resize(rgb_image, (self._render_size, self._render_size))
@@ -104,24 +111,58 @@ class DataLoader(torch.utils.data.Dataset):
             background[0] *= background_color[0]
             background[1] *= background_color[1]
             background[2] *= background_color[2]
+        flag = 'C'
+        file_path = os.path.join(self._masks_path_new, str(pid) + '.png')
 
-        mask_image = cv2.imread(os.path.join(self._masks_path, "depth_{:06d}.tiff".format(pid)), -1)
-        mask_image = mask_image[vertical_offset:vertical_offset + W]
-        mask_image = cv2.resize(mask_image, (self._render_size, self._render_size))
-        mask_image = mask_image.max() - mask_image.astype(np.float32)
-        _, mask_image = cv2.threshold(mask_image, 700, 1, cv2.THRESH_BINARY)
-        mask_image = mask_image[None]
-        rgb_image = mask_image * rgb_image + (1 - mask_image) * background
+        # if mask is provided: 
+        if  os.path.exists(file_path):
 
-        # Load pickle
-        smplx_filename = os.path.join(self._smplx_path, "mesh-f{:05d}_smplx.pkl".format(pid))
-        with open(smplx_filename, "rb") as f:
-            smplx_params = pickle.load(f)
-        for k in smplx_params.keys():
-            smplx_params[k] = smplx_params[k][None]
+            # For custrom data only 
+            mask_image = cv2.imread(os.path.join(self._masks_path_new, str(pid)+'.png'))
+            mask_image = mask_image.astype(np.float32) / 255.0
+            if len(mask_image.shape) > 2:
+                mask_image = mask_image[:, :, 0]
+            mask_image = mask_image[vertical_offset:vertical_offset + W]
+            mask_image = cv2.resize(mask_image, (self._render_size, self._render_size))
+            mask_image = mask_image[None]
+            rgb_image = mask_image * rgb_image + (1 - mask_image) * background
+            smplx_filename = os.path.join(self._smplx_path, "mesh-f{:05d}_smplx.pkl".format(pid))
+            with open(smplx_filename, "rb") as f:
+                smplx_params = pickle.load(f)
+            for k in smplx_params.keys():
+                smplx_params[k] = smplx_params[k]
+                #smplx_params[k] = smplx_params[k][None]
+                smplx_params[k] = np.expand_dims(np.array(smplx_params[k],dtype=np.float32), axis=0)
+        # For Xhuman default data only 
+        else :
+            #print("depth_{:06d}.tiff".format(pid))
+            mask_image = cv2.imread(os.path.join(self._masks_path, "depth_{:06d}.tiff".format(pid)), -1)
+            mask_image = mask_image[vertical_offset:vertical_offset + W]
+            mask_image = cv2.resize(mask_image, (self._render_size, self._render_size))
+            mask_image = mask_image.max() - mask_image.astype(np.float32)
+            _, mask_image = cv2.threshold(mask_image, 700, 1, cv2.THRESH_BINARY)
+            mask_image = mask_image[None]
+            rgb_image = mask_image * rgb_image + (1 - mask_image) * background
 
+            # Load pickle
+            smplx_filename = os.path.join(self._smplx_path, "mesh-f{:05d}_smplx.pkl".format(pid))
+            with open(smplx_filename, "rb") as f:
+                smplx_params = pickle.load(f)
+            for k in smplx_params.keys():
+                # originally (only one line)
+                # smplx_params[k] = smplx_params[k][None]
+
+            # just for test to see if the custom smplx param works -- remember to delete
+                smplx_params[k] = smplx_params[k]
+                #smplx_params[k] = smplx_params[k][None]
+                smplx_params[k] = np.expand_dims(np.array(smplx_params[k],dtype=np.float32), axis=0)
+
+
+
+        a = self._pid_camera_map[pid]
+        #print(len(self._camera_params["extrinsic"]))
         smplx_params["camera_matrix"] = K_to_camera_matrix(self._camera_params["intrinsic"], W, H)
-        smplx_params["camera_transform"] = self._camera_params["extrinsic"][self._pid_camera_map[pid]]
+        smplx_params["camera_transform"] = self._camera_params["extrinsic"][a]
 
         smplx_params["camera_matrix"] = smplx_params["camera_matrix"].astype(np.float32)
         smplx_params["camera_transform"] = smplx_params["camera_transform"].astype(np.float32)

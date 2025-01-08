@@ -32,7 +32,7 @@ runner:
 
     render_size: 544
     texture_size: 512
-    smplx_path: /mounted/home/dsvitov/Datasets/models_smplx_v1_1/models
+    smplx_path: /mounted/home/dresden/repositories/HAHA/data
     use_pca_for_hands: False
 
     criteria_config:
@@ -87,7 +87,7 @@ train_dataloader:
     use_hashing: False
     render_size: 544
     random_background: True
-    data_root: /mounted/home/dsvitov/Datasets/X-Humans/00019/train/Take5
+    data_root: /mounted/home/dresden/repositories/HAHA/data/00019/train/CustomTake5
 
 val_dataloader:
   batch_size: 4
@@ -95,7 +95,7 @@ val_dataloader:
   target: dataloaders.xhuman_loader.DataLoader
   params:
     render_size: 544
-    data_root: /mounted/home/dsvitov/Datasets/X-Humans/00019/train/Take7
+    data_root: /mounted/home/dresden/repositories/HAHA/data/00019/train/Take7
 
 test_dataloader:
   batch_size: 1
@@ -104,7 +104,7 @@ test_dataloader:
   params:
     render_size: 544
     white_background: True
-    data_root: /mounted/home/dsvitov/Datasets/X-Humans/00019/train/Take7
+    data_root: /mounted/home/dresden/repositories/HAHA/data/00019/test/Take6
 
 callbacks:
   image_logger:

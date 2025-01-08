@@ -69,6 +69,7 @@ class ImageLogger:
         keys_to_save = [
             "rgb_image",
             "rasterization",
+            "merged_mask"
         ]
 
         os.makedirs(save_folder, exist_ok=True)
@@ -78,6 +79,7 @@ class ImageLogger:
 
             image_list = []
             for key_name in keys_to_save:
+                print(key_name)
                 image = batch[key_name][id]
                 sub_folder = os.path.join(save_folder, key_name)
                 os.makedirs(sub_folder, exist_ok=True)
@@ -145,10 +147,21 @@ class ImageLogger:
 
     def on_test_end(self, runner):
         save_folder = os.path.join(runner.logger.log_dir, 'video')
+        
         os.makedirs(save_folder, exist_ok=True)
 
+        # Save the GT frames as a video
         self._save_video(os.path.join(save_folder, 'renders.mp4'), self._video_frames)
         self._save_video(os.path.join(save_folder, 'gt.mp4'), self._gt_video_frames)
+
+        # Save GT frames as individual images in a 'gt' folder
+        #gt_frames_folder = os.path.join(save_folder, 'gt')
+        #os.makedirs(gt_frames_folder, exist_ok=True)
+        
+        #for idx, frame in enumerate(self._gt_video_frames):
+        #    gt_frame_path = os.path.join(gt_frames_folder, f"frame_{idx:06d}.png")
+        #    cv2.imwrite(gt_frame_path, cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+        #    print(f"Saved GT frame: {gt_frame_path}")
 
         self._video_frames = []
         self._gt_video_frames = []

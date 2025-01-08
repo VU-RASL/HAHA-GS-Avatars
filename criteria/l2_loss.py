@@ -18,7 +18,14 @@ class L2Loss(torch.nn.Module):
                                   TrainingStage.FINETUNE_POSE]:
             return 0
         if training_stage in [TrainingStage.FINETUNE_TEXTURE,
-                              TrainingStage.INIT_TEXTURE]:
+                              TrainingStage.INIT_TEXTURE,
+                              
+                              TrainingStage.OPTIMIZE_OPACITY,
+                              TrainingStage.OPTIMIZE_GAUSSIANS,
+                              
+                              
+                              
+                              ]:
             use_mask = True
         else:
             use_mask = False

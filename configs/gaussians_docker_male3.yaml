@@ -33,8 +33,8 @@ runner:
 
     render_size: 544
     texture_size: 512
-    smplx_path: /mounted/home/dsvitov/Datasets/models_smplx_v1_1/models
-    use_pca_for_hands: True
+    smplx_path: /mounted/home/dresden/repositories/HAHA/data
+    use_pca_for_hands: False
 
     criteria_config:
       l2_loss:
@@ -87,7 +87,7 @@ train_dataloader:
     use_hashing: False
     render_size: 544
     random_background: True
-    data_root: /mounted/home/dsvitov/Datasets/people_snapshot_smplx/male-3-casual
+    data_root: /mounted/home/dresden/repositories/HAHA/data/PeopleSnapshot_SMPLX/male-3-casual
 
 val_dataloader:
   batch_size: 4
@@ -96,7 +96,7 @@ val_dataloader:
   params:
     render_size: 544
     white_background: True
-    data_root: /mounted/home/dsvitov/Datasets/people_snapshot_smplx/male-3-casual-test
+    data_root: /mounted/home/dresden/repositories/HAHA/data/PeopleSnapshot_SMPLX/male-3-casual-test
 
 test_dataloader:
   batch_size: 1
@@ -105,7 +105,7 @@ test_dataloader:
   params:
     render_size: 544
     white_background: True
-    data_root: /mounted/home/dsvitov/Datasets/people_snapshot_smplx/male-3-casual-test
+    data_root: /mounted/home/dresden/repositories/HAHA/data/PeopleSnapshot_SMPLX/male-3-casual-test
 
 callbacks:
   image_logger:
@@ -115,4 +115,11 @@ callbacks:
   animation_novel_poses:
     target: callbacks.animation_logger.AnimationLogger
     params:
-      animation_sequence: /mounted/home/dsvitov/Datasets/AMASS/CMU-SMPLX-N/61/61_15_stageii.npz
+      animation_sequence: /mounted/home/dresden/repositories/HAHA/data/CMU/61/61_15_stageii.npz
+  data_logger:
+    target: callbacks.data_logger.DataLogger
+    params:
+      tpath: /mounted/home/dresden/repositories/HAHA/T.json
+      apath: /mounted/home/dresden/repositories/HAHA/A.json
+      cpath: /mounted/home/dresden/repositories/HAHA/C.json
+    

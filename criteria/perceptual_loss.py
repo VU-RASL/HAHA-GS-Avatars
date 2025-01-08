@@ -21,7 +21,14 @@ class PerceptualLoss(torch.nn.Module):
                                   TrainingStage.INIT_TEXTURE]:
             return 0
         if training_stage in [TrainingStage.FINETUNE_TEXTURE,
-                              TrainingStage.INIT_TEXTURE]:
+                              TrainingStage.INIT_TEXTURE,
+                              
+                              TrainingStage.OPTIMIZE_OPACITY,
+                              TrainingStage.OPTIMIZE_GAUSSIANS,
+                              
+                              
+                              
+                              ]:
             use_mask = True
         else:
             use_mask = False
