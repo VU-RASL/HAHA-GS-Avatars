@@ -216,9 +216,9 @@ class TextureAndGaussianTrainer(nn.Module):
         for key in list(state_dict.keys()):
             if key.startswith('_body_pose_dict'):
                 del state_dict[key]
-        state_dict = {k: v for k, v in state_dict.items() if not k.startswith("lpips.net.scaling_layer")}
-        state_dict = {k: v for k, v in state_dict.items() if not k.startswith("_smplx_model.right_hand_components")}
-        state_dict = {k: v for k, v in state_dict.items() if not k.startswith("_smplx_model.left_hand_components")}
+        #state_dict = {k: v for k, v in state_dict.items() if not k.startswith("lpips.net.scaling_layer")}
+        #state_dict = {k: v for k, v in state_dict.items() if not k.startswith("_smplx_model.right_hand_components")}
+        #state_dict = {k: v for k, v in state_dict.items() if not k.startswith("_smplx_model.left_hand_components")}
         self.change_parameters_shape(len(state_dict['_xyz']))
 
         npoints = len(state_dict["_xyz"])
@@ -412,7 +412,7 @@ class TextureAndGaussianTrainer(nn.Module):
         rgb_gt = batch["rgb_image"]
 
         rgb = torch.clip(rgb, -1, 1)
-
+       
         return {
             "psnr": self.psnr(rgb, rgb_gt).detach().cpu().numpy().item(),
             "ssim": self.ssim(rgb, rgb_gt).detach().cpu().numpy().item(),
@@ -740,7 +740,7 @@ class TextureAndGaussianTrainer(nn.Module):
         
         
         merged_mask = torch.clip(alpha + data_dict["mask_uv"], 0, 1)  # alpha
-        rasterization = rasterization * merged_mask + (1 - merged_mask) * background
+        rasterization = rasterization * merged_mask  + (1 - merged_mask) * background
 
         return {
             "rasterization": rasterization,
@@ -970,20 +970,31 @@ class TextureAndGaussianTrainer(nn.Module):
             criterion_name = k
             value = statistics.mean(v)
             self.log('val_loss/' + criterion_name, value)
-            if criterion_name == 'psnr':
-                print(criterion_name, ':', value)
+            #if criterion_name == 'psnr':
+            print(criterion_name, ':', value)
 
     @torch.no_grad()
     def test(self, test_dataloader):
+        metrics_accumulate = defaultdict(list)
         with torch.no_grad():
             val_iter = iter(test_dataloader)
             for step in tqdm(range(len(test_dataloader))):
                 val_batch = next(val_iter)
                 assert self._loaded_training_stage is not None, "Test method only works with pretrained checkpoint"
-                outputs = self.test_step(val_batch, self._loaded_training_stage)
+                outputs,metrics  = self.test_step(val_batch, self._loaded_training_stage)
+                for k, v in metrics.items():
+                    metrics_accumulate[k].append(v)
                 outputs["batch_idx"] = step
                 self.ping_callbacks("on_test_batch_end", outputs)
             self.ping_callbacks("on_test_end")
+        
+        for k, v in metrics_accumulate.items():
+            
+            criterion_name = k
+            value = statistics.mean(v)
+            #if criterion_name == 'psnr':
+            print(criterion_name, ':', value)
+
 
     def training_step(self, train_batch, training_stage):
         train_batch = dict2device(train_batch, self.device)
@@ -1019,7 +1030,18 @@ class TextureAndGaussianTrainer(nn.Module):
 
     @torch.no_grad()
     def test_step(self, test_batch, training_stage):
+        metrics = {}
         test_batch = dict2device(test_batch, self.device)
-        self._render_frame(test_batch, training_stage, optimize_pose=True)
+        self._render_frame(test_batch, training_stage, optimize_pose=False)
 
-        return test_batch
+        
+        for criterion_name, criterion in self._criteria.items():
+            local_loss = criterion(test_batch, training_stage=training_stage)
+            if torch.is_tensor(local_loss):
+                local_loss = local_loss.detach().cpu().numpy().item()
+            metrics[criterion_name] = local_loss
+
+        metrics.update(self.calculate_metrics(test_batch))
+
+
+        return test_batch,metrics

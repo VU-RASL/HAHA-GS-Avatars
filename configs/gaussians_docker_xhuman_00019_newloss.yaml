@@ -30,12 +30,27 @@ runner:
     prune_step: 201
     prune_stop: 100000
 
-    render_size: 1080
+    render_size: 544
     texture_size: 512
     smplx_path: /mounted/home/dresden/repositories/HAHA/data
     use_pca_for_hands: False
 
     criteria_config:
+      # new loss for gassuain training (training stage 1)
+      l1_loss:
+        target: criteria.l1_loss.L1Loss
+        params:
+          weight: 0.8
+      lpips_loss:
+        target: criteria.lpips_loss.lpips_loss
+        params:
+          weight: 0.5
+      ssim_stage1_loss:
+        target: criteria.ssim_stage1_loss.ssim_stage1_loss
+        params:
+          weight: 0.2
+
+
       l2_loss:
         target: criteria.l2_loss.L2Loss
         params:
@@ -85,7 +100,7 @@ train_dataloader:
   target: dataloaders.xhuman_loader.DataLoader
   params:
     use_hashing: False
-    render_size: 1080
+    render_size: 544
     random_background: True
     data_root: /mounted/home/dresden/repositories/HAHA/data/00019/train/CustomTake5
 
@@ -94,15 +109,15 @@ val_dataloader:
   num_workers: 4
   target: dataloaders.xhuman_loader.DataLoader
   params:
-    render_size: 1080
-    data_root: /mounted/home/dresden/repositories/HAHA/data/00019/test/Take6
+    render_size: 544
+    data_root: /mounted/home/dresden/repositories/HAHA/data/00019/train/Take7
 
 test_dataloader:
   batch_size: 1
   num_workers: 4
   target: dataloaders.xhuman_loader.DataLoader
   params:
-    render_size: 1080
+    render_size: 544
     white_background: True
     data_root: /mounted/home/dresden/repositories/HAHA/data/00019/test/Take6
 

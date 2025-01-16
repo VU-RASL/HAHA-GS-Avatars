@@ -31,7 +31,7 @@ runner:
     prune_step: 201
     prune_stop: 100000
 
-    render_size: 544
+    render_size: 1080
     texture_size: 512
     smplx_path: /mounted/home/dresden/repositories/HAHA/data
     use_pca_for_hands: True
@@ -85,7 +85,7 @@ train_dataloader:
   target: dataloaders.smplx_loader.DataLoader
   params:
     use_hashing: False
-    render_size: 544
+    render_size: 1080
     random_background: True
     data_root: /mounted/home/dresden/repositories/HAHA/data/PeopleSnapshot_SMPLX/female-3-casual
 
@@ -94,7 +94,7 @@ val_dataloader:
   num_workers: 4
   target: dataloaders.smplx_loader.DataLoader
   params:
-    render_size: 544
+    render_size: 1080
     white_background: True
     data_root: /mounted/home/dresden/repositories/HAHA/data/PeopleSnapshot_SMPLX/female-3-casual-test
 
@@ -103,8 +103,8 @@ test_dataloader:
   num_workers: 4
   target: dataloaders.smplx_loader.DataLoader
   params:
-    render_size: 544
-    white_background: True
+    render_size: 1080
+    white_background: False
     data_root: /mounted/home/dresden/repositories/HAHA/data/PeopleSnapshot_SMPLX/female-3-casual-test
 
 callbacks:
@@ -112,7 +112,3 @@ callbacks:
     target: callbacks.image_logger.ImageLogger
     params:
       visualize_step: 100
-  animation_novel_poses:
-    target: callbacks.animation_logger.AnimationLogger
-    params:
-      animation_sequence: /mounted/home/dresden/repositories/HAHA/data/CMU/61/61_15_stageii.npz

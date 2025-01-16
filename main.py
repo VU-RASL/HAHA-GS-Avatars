@@ -134,7 +134,7 @@ def main(args):
         setup_tensorboard_logger(runner, config, opt, test_dataset.sequence_name)
 
         runner.initialize_optimizable_pose(test_dataset)
-        #runner.fit_pose(test_dataloader)
+        # runner.fit_pose(test_dataloader)
         runner.test(test_dataloader)
     else:
         train_dataset, train_dataloader, val_dataloader = create_train_val_datasets(config)

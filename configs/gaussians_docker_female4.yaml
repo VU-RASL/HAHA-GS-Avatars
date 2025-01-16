@@ -31,9 +31,9 @@ runner:
     prune_step: 201
     prune_stop: 100000
 
-    render_size: 544
+    render_size: 1080
     texture_size: 512
-    smplx_path: /mounted/home/dsvitov/Datasets/models_smplx_v1_1/models
+    smplx_path: /mounted/home/dresden/repositories/HAHA/data
     use_pca_for_hands: True
 
     criteria_config:
@@ -85,34 +85,30 @@ train_dataloader:
   target: dataloaders.smplx_loader.DataLoader
   params:
     use_hashing: False
-    render_size: 544
+    render_size: 1080
     random_background: True
-    data_root: /mounted/home/dsvitov/Datasets/people_snapshot_smplx/female-4-casual
+    data_root: /mounted/home/dresden/repositories/HAHA/data/PeopleSnapshot_SMPLX/female-4-casual
 
 val_dataloader:
   batch_size: 4
   num_workers: 4
   target: dataloaders.smplx_loader.DataLoader
   params:
-    render_size: 544
+    render_size: 1080
     white_background: True
-    data_root: /mounted/home/dsvitov/Datasets/people_snapshot_smplx/female-4-casual-test
+    data_root: /mounted/home/dresden/repositories/HAHA/data/PeopleSnapshot_SMPLX/female-4-casual-test
 
 test_dataloader:
   batch_size: 1
   num_workers: 4
   target: dataloaders.smplx_loader.DataLoader
   params:
-    render_size: 544
-    white_background: True
-    data_root: /mounted/home/dsvitov/Datasets/people_snapshot_smplx/female-4-casual-test
+    render_size: 1080
+    white_background: False
+    data_root: /mounted/home/dresden/repositories/HAHA/data/PeopleSnapshot_SMPLX/female-4-casual-test
 
 callbacks:
   image_logger:
     target: callbacks.image_logger.ImageLogger
     params:
       visualize_step: 100
-  animation_novel_poses:
-    target: callbacks.animation_logger.AnimationLogger
-    params:
-      animation_sequence: /mounted/home/dsvitov/Datasets/AMASS/CMU-SMPLX-N/61/61_15_stageii.npz

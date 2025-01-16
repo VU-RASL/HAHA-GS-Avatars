@@ -79,7 +79,7 @@ class ImageLogger:
 
             image_list = []
             for key_name in keys_to_save:
-                print(key_name)
+            
                 image = batch[key_name][id]
                 sub_folder = os.path.join(save_folder, key_name)
                 os.makedirs(sub_folder, exist_ok=True)

@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 import torch
 import smplx 
+import torch 
 
 def path_to_id(path):
     filename = path.split('/')[-1]
@@ -46,6 +47,28 @@ class DataLoader(torch.utils.data.Dataset):
 
         self.sequence_name = data_root.split('/')[-1].split('-test')[0]
         
+        gender = 'male'
+        model_params = dict(model_path='./data',
+                            model_type='smplx',
+                            use_pca=True,
+                            use_hands=True,
+                            use_face=True,
+                            num_pca_comps=12,
+                            use_face_contour=False,
+                            create_global_orient=False,
+                            create_body_pose=False,
+                            create_betas=False,
+                            create_left_hand_pose=False,
+                            create_right_hand_pose=False,
+                            create_expression=False,
+                            create_jaw_pose=False,
+                            create_leye_pose=False,
+                            create_reye_pose=False,
+                            create_transl=False,
+                            flat_hand_mean=False,
+                            dtype=torch.float32,
+                            )
+        self.smplx_model = smplx.create(gender=gender, **model_params)
 
     def load_sample(self, pid):
         rgb_image = cv2.imread(os.path.join(self._images_path, pid + ".png"))[..., ::-1]
@@ -82,9 +105,26 @@ class DataLoader(torch.utils.data.Dataset):
 
         # Load pickle
         smplx_filename = os.path.join(self._smplx_path, pid, "000.pkl")
+
+
         #print(pid,smplx_filename)
         with open(smplx_filename, "rb") as f:
             smplx_params = pickle.load(f)
+
+        # change pca hands comonpents(1,12) to hands pose (1,45)
+        lefthand_pca = smplx_params['left_hand_pose']
+        lefthand_ori = torch.einsum(
+                'bi,ij->bj', [torch.tensor(lefthand_pca), self.smplx_model.left_hand_components])
+        smplx_params['left_hand_pose'] = lefthand_ori.numpy()
+
+        righthand_pca = smplx_params['right_hand_pose']
+        righthand_ori = torch.einsum(
+                'bi,ij->bj', [torch.tensor(righthand_pca), self.smplx_model.right_hand_components])
+        smplx_params['right_hand_pose'] = righthand_ori.numpy()
+
+
+
+
         return {
             "pid": pid,
             "rgb_image": rgb_image,
