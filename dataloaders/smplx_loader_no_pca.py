@@ -113,6 +113,7 @@ class DataLoader(torch.utils.data.Dataset):
 
         # change pca hands comonpents(1,12) to hands pose (1,45)
         lefthand_pca = smplx_params['left_hand_pose']
+        print(self._smplx_path,pid,lefthand_pca.shape,self.smplx_model.left_hand_components.shape)
         lefthand_ori = torch.einsum(
                 'bi,ij->bj', [torch.tensor(lefthand_pca), self.smplx_model.left_hand_components])
         smplx_params['left_hand_pose'] = lefthand_ori.numpy()
@@ -121,10 +122,29 @@ class DataLoader(torch.utils.data.Dataset):
         righthand_ori = torch.einsum(
                 'bi,ij->bj', [torch.tensor(righthand_pca), self.smplx_model.right_hand_components])
         smplx_params['right_hand_pose'] = righthand_ori.numpy()
+  
+        # Target camera extrinsic
+        extrinsic = np.array([[1.0, 0.0, 0.0, 0.0],
+                            [0.0, 1.0, 0.0, 0.0],
+                            [0.0, 0.0, 1.0, 0.0],
+                            [0.0, 0.0, 0.0, 1.0]])
 
+        # Target intrinsic matrix
+        intrinsic = np.array([[2000, 0, 540],
+                            [0, 2000, 540],
+                            [0, 0, 1]])
 
+        # Extract rotation (R) and translation (T) from the extrinsic matrix
+        #R = extrinsic[:3, :3]  # Upper-left 3x3 for rotation
+        #T = extrinsic[:3, 3]   # Last column for translation
+        # Transform SMPL-X translation
+        #transl_new =  smplx_params['transl'] @ R + T
+        #smplx_params['camera_matrix'] = np.array([[ 3.7037037 ,  0.        ,  0.        ,  0.        ],
+       #[ 0.        ,  3.7037037 ,  0.        ,  0.        ],
+       #[ 0.        ,  0.        ,  1.0001    , -0.01010101],
+       #[ 0.        ,  0.        ,  1.        ,  0.        ]],dtype=np.float32)
 
-
+        #smplx_params['transl'] = transl_new
         return {
             "pid": pid,
             "rgb_image": rgb_image,

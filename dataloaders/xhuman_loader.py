@@ -85,7 +85,7 @@ class DataLoader(torch.utils.data.Dataset):
             self._pid_camera_map[int(pid)] = num
 
     def load_sample(self, pid):
-        self._masks_path_new = os.path.join(self.data_root, "render/mask")
+        self._masks_path_new = os.path.join(self.data_root, "render/sapiens_mask")
         rgb_image = cv2.imread(os.path.join(self._images_path, "color_{:06d}.png".format(pid)))
         H, W, _ = rgb_image.shape
         
@@ -114,15 +114,17 @@ class DataLoader(torch.utils.data.Dataset):
         flag = 'C'
         #file_path = os.path.join(self._masks_path_new, "{:05d}".format(pid-1)+'_gray.png')
         
-        #file_path = os.path.join(self._masks_path_new, "{:05d}".format(pid)+'.png')
+        file_path = os.path.join(self._masks_path_new, "{:05d}".format(pid)+'.png')
         flag = True
         # if mask is provided: 
         #if  os.path.exists(file_path):
         if  flag :
             # For custrom data only 
-            #mask_image = cv2.imread(os.path.join(self._masks_path_new, str(pid)+'.png'))
-            
-            mask_image = cv2.imread(os.path.join(self._masks_path_new, "{:05d}".format(pid-1)+'_gray.png'))
+            #print(os.path.join(self._masks_path_new, str(pid)+'.png'))
+            mask_image = cv2.imread(os.path.join(self._masks_path_new, str(pid)+'.png'))
+
+            #print(os.path.join(self._masks_path_new, "{:05d}".format(pid-1)+'_gray.png'))
+            #mask_image = cv2.imread(os.path.join(self._masks_path_new, "{:05d}".format(pid-1)+'_gray.png'))
             mask_image = mask_image.astype(np.float32) / 255.0
             if len(mask_image.shape) > 2:
                 mask_image = mask_image[:, :, 0]

@@ -101,7 +101,7 @@ def setup_tensorboard_logger(runner, config, opt, sequence_name):
     log_dir = generate_path_to_logs(config, opt, sequence_name)
     if opt.test_mode:
         log_dir += '-test'
-    os.makedirs(log_dir, exist_ok=False)
+    os.makedirs(log_dir, exist_ok=True)
     runner.logger = SummaryWriter(log_dir)
 
 
