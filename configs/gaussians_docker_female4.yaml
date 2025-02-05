@@ -95,7 +95,7 @@ val_dataloader:
   target: dataloaders.smplx_loader.DataLoader
   params:
     render_size: 1080
-    white_background: True
+    white_background: False
     data_root: /mounted/home/dresden/repositories/HAHA/data/PeopleSnapshot_SMPLX/female-4-casual-test
 
 test_dataloader:

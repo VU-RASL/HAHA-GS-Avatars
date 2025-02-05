@@ -2,7 +2,7 @@ import os
 import statistics
 from collections import defaultdict
 from PIL import Image
-
+import json
 import cv2
 import numpy as np
 import smplx
@@ -14,7 +14,7 @@ from torch.optim import Adam, SGD
 from torchmetrics import PeakSignalNoiseRatio, StructuralSimilarityIndexMeasure
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
 from tqdm import tqdm
-
+import time
 from main import TrainingStage
 from utils.data import dict2device, pass_smplx_dict, rotate_verts
 from utils.gaussian_rasterizer import MyGaussianRasterizer
@@ -28,7 +28,7 @@ from plyfile import PlyData, PlyElement
 
 class TextureAndGaussianTrainer(nn.Module):
     BETAS_SHAPE = 10
-
+    # for infant it is 20, original it is 10
     def __init__(
             self,
             render_size,
@@ -179,8 +179,30 @@ class TextureAndGaussianTrainer(nn.Module):
                             dtype=torch.float32,
                             )
         self._smplx_model = smplx.create(gender=gender, **model_params)
+
+        # for infant
+
+        #print(smplx_path)
+        # model_params = dict(model_path="/mounted/home/dresden/repositories/HAHA/data/smplx/smil_web.pkl",  model_type='smil', data_struct=None,
+        #          create_betas=True,
+        #          betas=None,
+        #          create_global_orient=True,
+        #          global_orient=None,
+        #          create_body_pose=True,
+        #          body_pose=None,
+        #          create_transl=True,
+        #          transl=None,
+        #          dtype=torch.float32,
+        #          batch_size=1,
+        #          joint_mapper=None, gender='neutral',
+        #          vertex_ids=None)
+
+        # self._smplx_model = smplx.create( **model_params)
+
+
         # here we may change dimension of beta and expression by self._smplx_model.shape_param_dim =100
         # self._smplx_model.expr_param_dim = 50
+        print("model_created")
         self._faces = self._smplx_model.faces_tensor.contiguous().int()
 
         model_fn = 'SMPLX_{}.{ext}'.format(gender.upper(), ext="npz")
@@ -244,10 +266,58 @@ class TextureAndGaussianTrainer(nn.Module):
         os.makedirs(save_folder, exist_ok=True)
         save_name = str(training_stage).split('.')[-1] + "_" + str(step) + '.ckpt'
         save_path = os.path.join(save_folder, save_name)
+        self.save_path = save_folder
         torch.save({
             'step': step,
             'state_dict': self.state_dict(),
         }, save_path)
+
+        # Save state_dict
+        state_dict = self.state_dict().copy()
+        for key in list(state_dict.keys()):
+            if key.startswith('_body_pose_dict'):
+                del state_dict[key]
+        state_dict = {k: v for k, v in state_dict.items() if not k.startswith("lpips")}
+        # print(state_dict['_smplx_model.lbs_weights'].shape)
+        # print(state_dict['_smplx_model.pose_mean'].shape)
+        # for key in list(state_dict.keys()):
+        #     print(key)
+        # len(state_dict["_xyz"])
+        # state_dict = data
+        for key in list(state_dict.keys()):
+            if key.startswith('_body_pose_dict'):
+                del state_dict[key]
+        state_dict = {k: v for k, v in state_dict.items() if not k.startswith("lpips")}
+        state_dict = {k: v for k, v in state_dict.items() if not k.startswith("_xyz_gradient")}
+        state_dict['_faces'] = state_dict['_smplx_model.faces_tensor']
+        state_dict = {k: v for k, v in state_dict.items() if not k.startswith("_smplx")}
+        state_dict = {k: v for k, v in state_dict.items() if not k.startswith("_max")}
+        # print(state_dict['_smplx_model.lbs_weights'].shape)
+        # print(state_dict['_smplx_model.pose_mean'].shape)
+        for key,value in list(state_dict.items()):
+            print(f'{key}: {value.shape}')
+            # print(key)
+        # len(state_dict["_xyz"])
+        data = state_dict
+
+        def tensor_to_list(obj):
+            """Recursively convert all Tensors in a dict to Python lists."""
+            if isinstance(obj, torch.Tensor):
+                return obj.cpu().numpy().tolist()
+            elif isinstance(obj, dict):
+                return {k: tensor_to_list(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [tensor_to_list(x) for x in obj]
+            elif isinstance(obj, tuple):
+                return tuple(tensor_to_list(x) for x in obj)
+            else:
+                return obj
+
+        data_converted = tensor_to_list(data)
+
+        with open(save_folder + "/state_dict.json", 'w') as f:
+            json.dump(data_converted, f)
+
 
         # save ply as original gaussian 
         print('xyz: ',self._xyz.shape)
@@ -257,8 +327,9 @@ class TextureAndGaussianTrainer(nn.Module):
         print('scale:',self._scaling.shape)
         save_path_ply = os.path.join(save_folder, str(training_stage).split('.')[-1] + "_" + str(step) + '.ply')
         self.save_path_ply = save_path_ply
-        
-        
+
+        # with open(save_folder+"/state_dict.json",'w') as f:
+        #     json.dump(data,f)
 
         self.save_ply(path = save_path_ply,
                       xyz = self._xyz,
@@ -386,10 +457,10 @@ class TextureAndGaussianTrainer(nn.Module):
 
             leye_pose = torch.tensor(smplx_params["leye_pose"], device=self.device)
             self._body_pose_dict_hf[pid]["leye_pose"] = torch.nn.Parameter(torch.zeros_like(leye_pose),
-                                                                           requires_grad=False)
+                                                                          requires_grad=False)
             reye_pose = torch.tensor(smplx_params["reye_pose"], device=self.device)
             self._body_pose_dict_hf[pid]["reye_pose"] = torch.nn.Parameter(torch.zeros_like(reye_pose),
-                                                                           requires_grad=False)
+                                                                          requires_grad=False)
 
             jaw_pose = torch.tensor(smplx_params["jaw_pose"], requires_grad=True, device=self.device)
             self._body_pose_dict_hf[pid]["jaw_pose"] = torch.nn.Parameter(jaw_pose, requires_grad=True)
@@ -628,7 +699,9 @@ class TextureAndGaussianTrainer(nn.Module):
                 smplx_params.update(self._body_pose_dict_hf[pid])
 
             smplx_params["betas"] = self._betas
-
+            # print(smplx_params["transl"].shape)
+            # print(smplx_params["global_orient"].shape)
+            # print(smplx_params["body_pose"].shape)
             pose_vectors.append(
                 torch.cat(
                     [
@@ -844,6 +917,7 @@ class TextureAndGaussianTrainer(nn.Module):
             steps,
             scheduler=None,
     ):
+        self.start_time = time.time()
         train_iter = iter(train_dataloader)
         print(training_stage)
         pbar = tqdm(range(steps))
@@ -853,7 +927,7 @@ class TextureAndGaussianTrainer(nn.Module):
                 train_batch = next(train_iter)
             except StopIteration:
                 train_iter = iter(train_dataloader)
-
+        
             optimizer.zero_grad()
 
             loss, outputs = self.training_step(train_batch, training_stage)
@@ -881,13 +955,15 @@ class TextureAndGaussianTrainer(nn.Module):
                         self.prune(optimizer)
 
             if val_dataloader is not None and self.global_step % self._eval_frequency == 0:
-                self.evaluate(val_dataloader, training_stage)
+                elapsed_time = time.time() - self.start_time
 
-            self.global_step += 1
+                self.evaluate(val_dataloader, training_stage,elapsed_time)
+
+            self.global_step += 1 
 
     def fit(self, train_dataloader, val_dataloader=None):
         self.global_step = 0
-
+        #val_dataloader = train_dataloader
         # Train Gaussians
         optimizer = self.configure_optimizers()
         scheduler = ExponentialLRxyz(optimizer, 0, self._gaussians_optimize_steps,
@@ -903,30 +979,31 @@ class TextureAndGaussianTrainer(nn.Module):
             optimizer, train_dataloader, val_dataloader, training_stage, self._gaussians_optimize_steps, scheduler
         )
         if val_dataloader is not None:
-            self.evaluate(val_dataloader, training_stage)
+            time_sofar = time.time() - self.start_time
+            self.evaluate(val_dataloader, training_stage,time_sofar)
         self.save_checkpoint(training_stage, self.global_step)
 
-        # Train the texture
-        optimizer = self.configure_optimizers()
-        training_stage = TrainingStage.FINETUNE_TEXTURE
-        self._change_lr(optimizer, training_stage)
-        self.fit_training_stage(
-            optimizer, train_dataloader, val_dataloader, training_stage, self._texture_optimize_steps
-        )
-        if val_dataloader is not None:
-            self.evaluate(val_dataloader, training_stage)
-        self.save_checkpoint(training_stage, self.global_step)
+        # # Train the texture
+        # optimizer = self.configure_optimizers()
+        # training_stage = TrainingStage.FINETUNE_TEXTURE
+        # self._change_lr(optimizer, training_stage)
+        # self.fit_training_stage(
+        #     optimizer, train_dataloader, val_dataloader, training_stage, self._texture_optimize_steps
+        # )
+        # if val_dataloader is not None:
+        #     self.evaluate(val_dataloader, training_stage)
+        # self.save_checkpoint(training_stage, self.global_step)
 
-        # Train the opacity
-        optimizer = self.configure_optimizers()
-        training_stage = TrainingStage.OPTIMIZE_OPACITY
-        self._change_lr(optimizer, training_stage)
-        self.fit_training_stage(
-            optimizer, train_dataloader, val_dataloader, training_stage, self._opacity_optimize_steps
-        )
-        if val_dataloader is not None:
-            self.evaluate(val_dataloader, training_stage)
-        self.save_checkpoint(training_stage, self.global_step)
+        # # Train the opacity
+        # optimizer = self.configure_optimizers()
+        # training_stage = TrainingStage.OPTIMIZE_OPACITY
+        # self._change_lr(optimizer, training_stage)
+        # self.fit_training_stage(
+        #     optimizer, train_dataloader, val_dataloader, training_stage, self._opacity_optimize_steps
+        # )
+        # if val_dataloader is not None:
+        #     self.evaluate(val_dataloader, training_stage)
+        # self.save_checkpoint(training_stage, self.global_step)
         
         #self.save_ply(path = self.save_path_ply,
         #              xyz = self._xyz,
@@ -953,7 +1030,7 @@ class TextureAndGaussianTrainer(nn.Module):
         )
 
     @torch.no_grad()
-    def evaluate(self, val_dataloader, training_stage):
+    def evaluate(self, val_dataloader, training_stage, time_sofar=0):
         metrics_accumulate = defaultdict(list)
         with torch.no_grad():
             val_iter = iter(val_dataloader)
@@ -966,12 +1043,21 @@ class TextureAndGaussianTrainer(nn.Module):
                 outputs["batch_idx"] = step
                 self.ping_callbacks("on_validation_batch_end", outputs)
 
-        for k, v in metrics_accumulate.items():
-            criterion_name = k
-            value = statistics.mean(v)
-            self.log('val_loss/' + criterion_name, value)
-            #if criterion_name == 'psnr':
-            print(criterion_name, ':', value)
+        output_file = os.path.join(self.save_path, "metrics.txt")  
+        # Open the file in write mode and save the dictionary
+        with open(output_file, "w") as f:
+            for k, v in metrics_accumulate.items():
+                criterion_name = k
+                value = statistics.mean(v)
+                self.log('val_loss/' + criterion_name, value)
+                print(criterion_name, ':', value)  # Print to console
+                f.write(f"{criterion_name}: {value}\n")  # Write to file
+
+            custom_line = "NGS: " + str(self._xyz.shape)
+            f.write(f"\n{custom_line}\n")
+            custom_line = "Time: " + str(time_sofar)
+            f.write(f"\n{custom_line}\n")
+        print(f"Metrics saved to {output_file}")
 
     @torch.no_grad()
     def test(self, test_dataloader):

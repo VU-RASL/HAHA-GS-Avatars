@@ -1,0 +1,1 @@
+python main.py --base=./configs/gaussians_docker_custom.yaml --pretrained=./logs/gaussians_docker_custom/custom_male3_1080_1-16/checkpoints/OPTIMIZE_OPACITY_10500.ckpt --test_mode

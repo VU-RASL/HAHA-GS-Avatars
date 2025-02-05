@@ -5,7 +5,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - cudatoolkit=11.3.1
+  - cudatoolkit=11.7
   - ffmpeg=4.2.2
   - omegaconf=2.3.0
   - pillow=10.0.1
@@ -14,9 +14,9 @@ dependencies:
   - python=3.8.18
   - tqdm=4.66.1
   - trimesh=4.0.4
-  - pytorch=1.12.1
-  - torchaudio=0.12.1
-  - torchvision=0.13.1
+  - pytorch=1.13.1
+  - torchaudio=0.13.1
+  - torchvision=0.14.1
   - pytorch-lightning=1.8.1
   - scikit-learn
   - pip:
@@ -25,7 +25,8 @@ dependencies:
       - opencv-python==4.8.1.78
       - pyglet==1.4.0b1
       - pyopengl==3.1.0
-      - smplx==0.1.28
       - tensorboard==2.14.0
       - av
+      - plyfile
       - transforms3d
+      - git+https://github.com/VU-RASL/smil

@@ -113,7 +113,7 @@ class DataLoader(torch.utils.data.Dataset):
 
         # change pca hands comonpents(1,12) to hands pose (1,45)
         lefthand_pca = smplx_params['left_hand_pose']
-        print(self._smplx_path,pid,lefthand_pca.shape,self.smplx_model.left_hand_components.shape)
+        #print(self._smplx_path,pid,lefthand_pca.shape,self.smplx_model.left_hand_components.shape)
         lefthand_ori = torch.einsum(
                 'bi,ij->bj', [torch.tensor(lefthand_pca), self.smplx_model.left_hand_components])
         smplx_params['left_hand_pose'] = lefthand_ori.numpy()
